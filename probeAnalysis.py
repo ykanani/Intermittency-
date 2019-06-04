@@ -124,15 +124,33 @@ class Probes(object):
 
 #######################################
 ############ Processing files #########
-class processFileReturn(object):
-    def __init__(self,data,probeList,probeLoc,probeLoctn,times, varName):
-        self.data = data
-        self.probeList = probeList
-        self.probeLoc = probeLoc
-        self.probeLoctn = probeLoctn
-        self.times = times
-        self.varName = varName
-
+class Probe(object):
+    def __init__(self):
+        self.data = None
+        self.list = None
+        self.loc = None
+        self.loctn = None
+        self.time = None
+        self.varName = None
+    def getProbe(self,n):
+            if n in self.list:
+                index=self.list.index(n)
+            else:
+                index = 0
+                print("probe is not in the list, reporting probe #"+ str(self.list[index]))
+            #print("Index========================",index)
+            
+            probe= Probe()
+            probe.list = self.list[index]
+            probe.loc = self.loc[index]
+            probe.loctn = self.loctn[index]
+            probe.time=self.time
+            if self.data.ndim == 2:
+                probe.data = self.data[index,:]
+            else:
+                probe.data = self.data[index,:,:]
+            
+            return(probe)
     
 def processFile(probeInfo,probeName,initTime,varName,nComp):
     file = "postProcessing/" + probeName + "/" + initTime + "/" + varName
@@ -188,7 +206,14 @@ def processFile(probeInfo,probeName,initTime,varName,nComp):
     #       np.array(list(dataZipped[int(x)*3+2] for x in probeList),dtype=float), 
     #       np.array(list(dataZipped[int(x)*3+3] for x in probeList),dtype=float)))
     print("finished reading " + file)
-    return(processFileReturn(data,probeList,probeLoc,probeLoctn,times,varName))
+    probe=Probe()
+    probe.data=data
+    probe.time=times
+    probe.list=probeList
+    probe.loc=probeLoc
+    probe.loctn=probeLoctn
+    probe.varName=varName
+    return(probe)
 #
 ### Data structure 
 ###           times     
@@ -237,8 +262,8 @@ def selectProbes(loctn, s, walldist):
         if (loctn[j][0]>s[0] and loctn[j][0]<s[1] and loctn[j][1]>walldist[0] and loctn[j][1]<walldist[1]):
             index.append(j)
             
-  print(index)
-  print(loctn[index])
+  #print(index)
+  #print(loctn[index])
   return index
   
 class Gamma(object):
@@ -250,23 +275,23 @@ class Gamma(object):
 
 ### cluster probes corresponding to their locations, outputs an array with corresponding bin numbers, last col remains gamma
 def clusterProbes(gamma, thresh):
-    print(gamma.shape)
+    #print(gamma.shape)
     gammaIndex=np.insert(gamma,[0,0],np.ones([len(gamma[:,0]),2]),axis=1)
-    print(gammaIndex.shape)
+    #print(gammaIndex.shape)
     
     ####inserted two columns to the gamma at the beginning, to preserve s and w to be used later, first column is the s _index, the second column would be the w index 
     # thresh 0 - s, thresh 1- w, thresh 3 - z
     #sorting based on s
     gammaIndex=gammaIndex[np.argsort(gammaIndex[:,2])]
     
-    print('gammaIndex -sorted s\n',gammaIndex.round(6))
+    #print('gammaIndex -sorted s\n',gammaIndex.round(6))
     #calculate the diff in sorted s1
     diffs=np.diff(gammaIndex[:,2])
     diffIndex=np.argwhere(diffs>thresh[0]).flatten()
     diffIndex = np.hstack([0, diffIndex + 1, len(gammaIndex)+1])
     counters=0
     for a, b in zip(diffIndex[:-1], diffIndex[1:]):  # iterate over index pairs
-        print('ab=',a,',',b)
+        #print('ab=',a,',',b)
         gammaIndex[a:b,0]=counters
         counters=counters+1
         
@@ -276,15 +301,15 @@ def clusterProbes(gamma, thresh):
         diffw=np.diff(subgammaIndex[:,3])
         diffwIndex=np.argwhere(diffw>thresh[1]).flatten()
         diffwIndex = np.hstack([0, diffwIndex + 1, len(subgammaIndex)])
-        print('sub gamma\n',subgammaIndex.round(6))
+        #print('sub gamma\n',subgammaIndex.round(6))
         counterw=0
         for c, d in zip(diffwIndex[:-1], diffwIndex[1:]):  # iterate over index pairs
-            print('cd=',c,',',d)
+            #print('cd=',c,',',d)
             gammaIndex[c+a:d+a,1]=counterw
             counterw=counterw+1
-        print('updated gammaIndex in sub loop\n',gammaIndex.round(6))
+        #print('updated gammaIndex in sub loop\n',gammaIndex.round(6))
     GammaList=[]
-    print(np.max(gammaIndex[:,0]))
+    #print(np.max(gammaIndex[:,0]))
     for i in range(int(np.max(gammaIndex[:,0]))+1):
         #filter this location
         gammas=gammaIndex[gammaIndex[:,0]==i,:]

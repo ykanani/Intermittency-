@@ -20,7 +20,7 @@ from probeAnalysis import selectProbes
 from probeAnalysis import processFile
 from probeAnalysis import clusterProbes
 from probeAnalysis import highpass_filter
-
+from scipy.interpolate import interp1d
 #####GOOD FONTS!!!! remove comment
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern'],'size':20})
 rc('text', usetex=True)
@@ -47,16 +47,16 @@ dt=1e-5
 ndelta=21  # number of probes at each station (wall normal)
 ns=90      # number of stations
 probeInfo=[0,ndelta*ns-1,1] # [first,last,interval]
-zlocs=['-0.05', '-0.04']#, '-0.03', '-0.02', '-0.01', '0', '0.01', '0.02', '0.03', '0.04', '0.05']
+zlocs=['-0.05']#, '-0.04', '-0.03', '-0.02', '-0.01', '0', '0.01', '0.02', '0.03', '0.04', '0.05']
 gamma = np.empty([0,4]) # culumns: s,w,z,gamma
 for k in range(len(zlocs)):
     probeName=  "p_ss_BL_z" + zlocs[k]# "test"  # 
     print('reading data file',"probes-" + probeName)
-    with open("probes-" + probeName, "rb") as fp:   #Pickling
-        Allprobes=pickle.load(fp)
-    
-    print(Allprobes.loctn[:,0].round(4))
-    selectedProbes = selectProbes(Allprobes.loctn, [0, 0.7], [0, 100])
+    with open("postProcessing/" + "D" + "_" + probeName, "rb") as fp:   #unPickling
+        D=pickle.load(fp)
+    print('finished reading data file',"probes-" + probeName)
+    print(D.loctn[:,0].round(4))
+    selectedProbes = selectProbes(D.loctn, [0.4, 0.505], [0, 100])
     nprobes=len(selectedProbes)
     #print(test.U.shape)
     
@@ -64,20 +64,13 @@ for k in range(len(zlocs)):
     ##### 1-Otsu
     ##### 2-Adpative
     ##### 3-Aribitrary fraction
-    method=3
+    method=1
     for i in range(nprobes):
         probe=selectedProbes[i]
-        print("location= ", Allprobes.getProbe(probe).loctn.round(10))
-        loctn=Allprobes.getProbe(probe).loctn
-        time=Allprobes.getProbe(probe).time
-        U=Allprobes.getProbe(probe).Utn[:,0]
-        V=Allprobes.getProbe(probe).Utn[:,1]
-        W=Allprobes.getProbe(probe).Utn[:,2]
-        Umean=np.mean(Allprobes.getProbe(probe).Utn[:,0])
-        Vmean=np.mean(Allprobes.getProbe(probe).Utn[:,1])
-        Wmean=np.mean(Allprobes.getProbe(probe).Utn[:,2])
-
-        D=Allprobes.getProbe(probe).D #
+        #print("location= ", D.getProbe(probe).loctn.round(8))
+        loctn=D.getProbe(probe).loctn
+        time=D.getProbe(probe).time
+        detector=D.getProbe(probe).data #
         #D=(np.square(ddt(W,time))) # 
         #D= (np.square(ddt(np.multiply(U,V),time)))
         #D=Allprobes.getProbe(probes).filterDA
@@ -86,7 +79,7 @@ for k in range(len(zlocs)):
 
         ##smoothing the signal
         N=100
-        DSmooth=np.convolve(D, np.ones((N,))/N, mode='valid')
+        DSmooth=np.convolve(detector, np.ones((N,))/N, mode='valid')
         ## Laminar/Turbulent Discrimination
         if method==1:
             ### Otsu
@@ -105,7 +98,7 @@ for k in range(len(zlocs)):
             #pl.plot(time[int(N/2):int(-N/2+1)],lt,'-k',label="LT") 
         elif method==3:
             ### Arbitrary fraction of Max D
-            C=0.01
+            C=0.5
             lt_cmax=np.where(DSmooth>C*np.max(DSmooth), 1, 0) # Laminar_Turbulent, C*max(D)
             lt = lt_cmax
             #pl.plot(time[int(N/2):int(-N/2+1)],lt_cmax,'-b',label="LT")
@@ -116,22 +109,31 @@ for k in range(len(zlocs)):
         #gamma[i,3]=np.mean(lt)
     
     
-print("gamma")
-print(gamma)  
-print("arg sort s")
+
 
 GammaList=clusterProbes(gamma,[1e-3, 1e-9,0])
-with open("GammaList.txt", "wb") as fp:   #Pickling
-    pickle.dump(GammaList, fp)
+#with open("GammaList.txt", "wb") as fp:   #Pickling
+#    pickle.dump(GammaList, fp)
 
 
 pl.figure(7)
-for i in range(len(GammaList)):
+for i in range(0,len(GammaList),4):
     print(GammaList[i].wallDist)
-    pl.plot(GammaList[i].wallDist,GammaList[i].gamma,label="$\gamma$")
-legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
-frame = legend.get_frame()
-frame.set_edgecolor('black')
+    g = GammaList[i].gamma
+    w = GammaList[i].wallDist
+       
+    gsmooth = interp1d(w, g, kind='cubic',fill_value='extrapolate')
+    wmid=w[:-1] + np.diff(w) / 2
+    wnew = np.sort(np.concatenate((w,wmid)))
+    print('w',w)
+    print('wnew',wnew)
+    gnew = gsmooth(wnew)
+    pl.plot(wnew,gnew,label="$s/L=$"+str((GammaList[i].s/C).round(2)))
+    legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
+    frame = legend.get_frame()
+    frame.set_edgecolor('black')
+    pl.xlabel("Wall Distance")
+    pl.ylabel("$\gamma$")
 pl.show()
 alaki
     
@@ -235,7 +237,7 @@ while cc:
     
     if cc>0 :
         probes=eval(input("Please enter the probe number:"))
-        print("location= ", Allprobes.getProbe(probes).loctn.round(10))
+        #print("location= ", Allprobes.getProbe(probes).loctn.round(10))
         pl.figure(1)
         pl.plot(Allprobes.getProbe(probes).time,Allprobes.getProbe(probes).Utn[:,1],'-k',label="Ut_y")
         pl.plot(Allprobes.getProbe(probes).time,Allprobes.getProbe(probes).Utn[:,2],'-.k',label="Ut_w")
