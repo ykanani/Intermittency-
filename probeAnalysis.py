@@ -265,7 +265,16 @@ def selectProbes(loctn, s, walldist):
   #print(index)
   #print(loctn[index])
   return index
-  
+  ### select probes with specific criteria (e.q. locaiton)
+def selectProbeIndexes(probeIndex,s,walldist):
+  index=[]
+  for j in range(probeIndex.shape[0]):
+        if (probeIndex[j][0]>=s[0] and probeIndex[j][0]<=s[1] and probeIndex[j][1]>=walldist[0] and probeIndex[j][1]<=walldist[1]):
+            index.append(j)
+            
+  #print(index)
+  #print(loctn[index])
+  return index
 class Gamma(object):
     def __init__(self,s,wallDist,gamma):
         self.s = s
@@ -330,3 +339,38 @@ def clusterProbes(gamma, thresh):
         # print(GammaList[i].gamma)
     
     return GammaList
+def ProbeIndex(gamma, thresh):
+    #print(gamma.shape)
+    gammaIndex=np.insert(gamma,[0,0],np.ones([len(gamma[:,0]),2]),axis=1)
+    #print(gammaIndex.shape)
+    
+    ####inserted two columns to the gamma at the beginning, to preserve s and w to be used later, first column is the s _index, the second column would be the w index 
+    # thresh 0 - s, thresh 1- w, thresh 3 - z
+    #sorting based on s
+    gammaIndex=gammaIndex[np.argsort(gammaIndex[:,2])]
+    
+    #print('gammaIndex -sorted s\n',gammaIndex.round(6))
+    #calculate the diff in sorted s1
+    diffs=np.diff(gammaIndex[:,2])
+    diffIndex=np.argwhere(diffs>thresh[0]).flatten()
+    diffIndex = np.hstack([0, diffIndex + 1, len(gammaIndex)+1])
+    counters=0
+    for a, b in zip(diffIndex[:-1], diffIndex[1:]):  # iterate over index pairs
+        #print('ab=',a,',',b)
+        gammaIndex[a:b,0]=counters
+        counters=counters+1
+        
+        subgammaIndex=gammaIndex[a:b,:]
+        subgammaIndex=subgammaIndex[np.argsort(subgammaIndex[:,3])]
+        gammaIndex[a:b,:]=subgammaIndex
+        diffw=np.diff(subgammaIndex[:,3])
+        diffwIndex=np.argwhere(diffw>thresh[1]).flatten()
+        diffwIndex = np.hstack([0, diffwIndex + 1, len(subgammaIndex)])
+        #print('sub gamma\n',subgammaIndex.round(6))
+        counterw=0
+        for c, d in zip(diffwIndex[:-1], diffwIndex[1:]):  # iterate over index pairs
+            #print('cd=',c,',',d)
+            gammaIndex[c+a:d+a,1]=counterw
+            counterw=counterw+1
+        #print('updated gammaIndex in sub loop\n',gammaIndex.round(6))
+    return gammaIndex
