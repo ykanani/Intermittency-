@@ -16,7 +16,7 @@ from scipy import signal
 from scipy.interpolate import spline
 from skimage import filters
 
-from probeAnalysis import (Gamma, Probes, clusterProbes, processFile,
+from probeAnalysis import (Gamma, ProbeVars, clusterProbes, processFile,
                            selectProbes)
 
 os.chdir('I:/PostProcess/ccc2')
@@ -49,23 +49,23 @@ for k in range(len(zlocs)):
     # del D
     # gc.collect()
 
-    p = processFile(probeInfo,probeName,initTime= "0.43",varName="p",nComp=1)
-    with open("postProcessing/" + p.varName + "_" + probeName, "wb") as fp:   #Pickling
-        pickle.dump(p, fp)
-    del p
-    gc.collect()
+    # p = processFile(probeInfo,probeName,initTime= "0.43",varName="p",nComp=1)
+    # with open("postProcessing/" + p.varName + "_" + probeName, "wb") as fp:   #Pickling
+    #     pickle.dump(p, fp)
+    # del p
+    # gc.collect()
 
-    T1 = processFile(probeInfo, probeName,initTime= "0.43",varName="T1",nComp=1)
-    with open("postProcessing/" + T1.varName + "_" + probeName, "wb") as fp:   #Pickling
-        pickle.dump(T1, fp)
-    del T1
+    # T1 = processFile(probeInfo, probeName,initTime= "0.43",varName="T1",nComp=1)
+    # with open("postProcessing/" + T1.varName + "_" + probeName, "wb") as fp:   #Pickling
+    #     pickle.dump(T1, fp)
+    # del T1
     
 
-    T2 = processFile(probeInfo,probeName,initTime= "0.43",varName="T2",nComp=1)
-    with open("postProcessing/" + T2.varName + "_" + probeName, "wb") as fp:   #Pickling
-        pickle.dump(T2, fp)
-    del T2
-    gc.collect()
+    # T2 = processFile(probeInfo,probeName,initTime= "0.43",varName="T2",nComp=1)
+    # with open("postProcessing/" + T2.varName + "_" + probeName, "wb") as fp:   #Pickling
+    #     pickle.dump(T2, fp)
+    # del T2
+    # gc.collect()
 
     # U = processFile(probeInfo,probeName,initTime= "0.43",varName="U",nComp=3)
     # with open("postProcessing/" + U.varName + "_" + probeName, "wb") as fp:   #Pickling
@@ -97,11 +97,11 @@ for k in range(len(zlocs)):
     # del filterQA
     # gc.collect()
 
-    # gradU = processFile(probeInfo,probeName,initTime= "0.43001",varName="gradU",nComp=9)
-    # with open("postProcessing/" + gradU.varName + "_" + probeName, "wb") as fp:   #Pickling
-    #     pickle.dump(gradU, fp, 269112747.3345178)
-    # del gradU
-    # gc.collect()
+    gradU = processFile(probeInfo,probeName,initTime= "0.43001",varName="gradU",nComp=9)
+    with open("postProcessing/" + gradU.varName + "_" + probeName, "wb") as fp:   #Pickling
+        pickle.dump(gradU, fp, protocol=4)
+    del gradU
+    gc.collect()
 
     # Q = processFile(probeInfo,probeName,initTime= "0.43001",varName="Q",nComp=1)
     # with open("postProcessing/" + Q.varName + "_" + probeName, "wb") as fp:   #Pickling

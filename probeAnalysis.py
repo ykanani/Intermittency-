@@ -2,6 +2,10 @@ import re
 import numpy as np
 import os, sys
 from scipy import signal
+from skimage import filters
+import matplotlib.pyplot as pl
+from scipy.ndimage.filters import generic_filter
+
 
 ## transfers the coordinates
 ## calculates s,wallDist and z-axiz
@@ -72,11 +76,13 @@ class coordinateTransfer(object):
         return(np.array([si, wallDist,z]))
 
 # creates an object that contains all probe data
-class Probes(object):
+class ProbeVars(object):
     def __init__(self):
         self.time = None
         self.p = None
         self.T1 = None
+        self.T1mean = None
+        self.T1prime = None
         self.T2 = None
         self.Utn = None
         self.U = None
@@ -90,16 +96,27 @@ class Probes(object):
         self.list = None
         self.loc = None
         self.loctn = None
+        self.u = None
+        self.v = None
+        self.w = None
+        self.uprime = None
+        self.vprime = None
+        self.wprime = None
+        self.umean = None
+        self.vmean = None
+        self.wmean = None
+        self.detector = None
         
     def getProbe(self,n):
-        if n in self.list:
-            index=self.list.index(n)
-        else:
-            index = 0
-            print("probe is not in the list, reporting probe #"+ str(self.list[index]))
+        ## to get probe number, deprecated
+        # if n in self.list:
+        #     index=self.list.index(n)
+        # else:
+        #     index = 0
+        #     print("probe is not in the list, reporting probe #"+ str(self.list[index]))
         #print("Index========================",index)
-        
-        vars= Probes()
+        index = n
+        vars= ProbeVars()
         
         vars.p = self.p[index,:]
         vars.T1 = self.T1[index,:]
@@ -133,13 +150,14 @@ class Probe(object):
         self.time = None
         self.varName = None
     def getProbe(self,n):
-            if n in self.list:
-                index=self.list.index(n)
-            else:
-                index = 0
-                print("probe is not in the list, reporting probe #"+ str(self.list[index]))
+            ## to get probe number, deprecated
+            # if n in self.list:
+            #     index=self.list.index(n)
+            # else:
+            #     index = 0
+            #     print("probe is not in the list, reporting probe #"+ str(self.list[index]))
             #print("Index========================",index)
-            
+            index=n
             probe= Probe()
             probe.list = self.list[index]
             probe.loc = self.loc[index]
@@ -151,6 +169,22 @@ class Probe(object):
                 probe.data = self.data[index,:,:]
             
             return(probe)
+
+    def append(self,probe):
+        if self.loc is None:
+            self.data =probe.data
+            self.list = probe.list
+            self.loc = probe.loc
+            self.loctn =probe.loctn
+            self.time = probe.time
+            self.varName = probe.varName
+        else:
+            self.data = np.concatenate((self.data,probe.data))
+            self.list = np.concatenate((self.list,probe.list))
+            self.loc = np.concatenate((self.loc,probe.loc))
+            self.loctn = np.concatenate((self.loctn,probe.loctn))
+
+
     
 def processFile(probeInfo,probeName,initTime,varName,nComp):
     file = "postProcessing/" + probeName + "/" + initTime + "/" + varName
@@ -229,13 +263,25 @@ def processFile(probeInfo,probeName,initTime,varName,nComp):
 ###########
 
 def ddt(signal,time):
-    ddt=[]
-    ddt.append((signal[1]-signal[0])/(time[1]-time[0]))     #handling first data point derivate (first order-forward)
-    for i in range(1,len(signal)-1):
-        ddt.append((signal[i+1]-signal[i-1])/(time[i+1]-time[i-1]))
-    ddt.append((signal[-1]-signal[-2])/(time[-1]-time[-2])) #handling last data point derivate (first order-backward)
-    return(np.asarray(ddt))
+    ddt = np.gradient(signal, time,axis=1)
+    # if signal.ndim == 1:
+    #     ddt=[]
+    #     ddt.append((signal[1]-signal[0])/(time[1]-time[0]))     #handling first data point derivate (first order-forward)
+    #     for i in range(1,len(signal)-1):
+    #         ddt.append((signal[i+1]-signal[i-1])/(time[i+1]-time[i-1]))
+    #     ddt.append((signal[-1]-signal[-2])/(time[-1]-time[-2])) #handling last data point derivate (first order-backward)
+    # elif signal.ndim == 2:
+        
+
+        # ddt=np.zeros(signal.shape)
+        # ddt[:,1]=(signal[:,1]-signal[:,0])/(time[1]-time[0])     #handling first data point derivate (first order-forward)
+        # for i in range(1,signal.shape[1]-1):
+        #     ddt=np.append(ddt,(signal[:,i+1]-signal[:,i-1])/(time[i+1]-time[i-1]),axis=1)
+        # ddt=np.append(ddt,(signal[:,-1]-signal[:,-2])/(time[-1]-time[-2]),axis=1) #handling last data point derivate (first order-backward)
     
+    return(ddt)
+    
+
     
 #################
 ##### high pass filter
@@ -251,7 +297,8 @@ def highpass_filter(y, sr,filter_stop_freq,filter_pass_freq,filter_order):
   filter_coefs = signal.firls(filter_order, bands, desired, nyq=nyquist_rate)
 
   # Apply high-pass filter
-  filtered_audio = signal.filtfilt(filter_coefs, [1], y)
+  filtered_audio = signal.filtfilt(filter_coefs, [1], y,axis=0)
+  
   return filtered_audio
   
   
@@ -374,3 +421,58 @@ def ProbeIndex(gamma, thresh):
             counterw=counterw+1
         #print('updated gammaIndex in sub loop\n',gammaIndex.round(6))
     return gammaIndex
+
+def lt(detector,method,input,smoothingLength):
+    N=smoothingLength #100
+    dSmooth=signal.convolve(detector, np.ones((N,))/N, mode='valid')
+    #dSmooth=signal.convolve(dSmooth, np.ones((N,))/N, mode='valid')
+    #dSmooth2=running_mean(detector,N)
+    dt=1e-5
+    #dSmooth2=highpass_filter(detector,1/dt,1/(dt*50),2/(dt*50),1001)
+    # dSmooth = generic_filter(detector, np.std, size=N)
+
+    ##std filter
+    # blur=signal.convolve(detector, np.ones((N,))/N, mode='valid')
+    # blur2=signal.convolve(np.square(detector), np.ones((N,))/N, mode='valid')
+    # dSmooth=np.sqrt(blur2-np.square(blur))
+
+    # pl.figure(10)
+    # pl.plot(detector,'k')
+    # pl.plot(dSmooth,'-r')
+    # pl.plot(dSmooth2,'-b')
+    # pl.show()
+    ## Laminar/Turbulent Discrimination
+    if method=='otsuloc':
+        ### Otsu
+        thresh_otsu= filters.threshold_otsu(dSmooth)
+        lt_otsu=np.where(dSmooth>thresh_otsu, 1, 0) # Laminar_Turbulent, Ostu
+        lamtu = lt_otsu
+        print("Otsu Threshhold={:.2e}".format(thresh_otsu))
+        #pl.plot(time[int(N/2):int(-N/2+1)],lt_otsu,'-r',label="LT")
+    elif method=='adaptive':
+        # ### Adaptive
+        block_size = 5001
+        print(np.tile(dSmooth,(2,1)).shape)
+        lt_adaptive = filters.threshold_adaptive(np.tile(dSmooth,(2,1)), block_size, offset=100)*1
+        lamtu = lt_adaptive[0,:]
+        print(lt_adaptive[0,:].shape)
+        #pl.plot(time[int(N/2):int(-N/2+1)],lt,'-k',label="LT") 
+    elif method=='percentageMax':
+        ### Arbitrary fraction of Max D
+        C = input
+        
+        lt_cmax=np.where(dSmooth>C*np.max(dSmooth),1,0)#0.01*24473540.92065062,1,0)#>0.01*269112747.3345178,1,0) ##6419964748.39, 1, 0) # Laminar_Turbulent, C*max(D)
+        lamtu = lt_cmax
+        #pl.plot(time[int(N/2):int(-N/2+1)],lt_cmax,'-b',label="LT")
+    elif method=='threshglob':
+        thresh = input 
+        ### threshhold, can be c*Max(D) or otsu global   
+        #lt_cmax=np.where(DSmooth>C*np.max(DSmooth), 1, 0) # Laminar_Turbulent, C*max(D)
+        lt_cmax=np.where(dSmooth>thresh,1,0)#0.01*24473540.92065062,1,0)#>0.01*269112747.3345178,1,0) ##6419964748.39, 1, 0) # Laminar_Turbulent, C*max(D)
+        lamtu = lt_cmax
+        #pl.plot(time[int(N/2):int(-N/2+1)],lt_cmax,'-b',label="LT")
+    return lamtu
+
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0)) 
+    return (cumsum[N:] - cumsum[:-N]) / float(N)
