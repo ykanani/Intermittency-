@@ -13,7 +13,7 @@ from scipy import signal
 from scipy import stats
 from scipy.interpolate import spline
 from decimal import Decimal
-
+import datetime
 #os.chdir("D:\Dropbox\PhD\Python")
 #import easygui
 from matplotlib import rc
@@ -28,8 +28,11 @@ from probeAnalysis import ProbeIndex
 from probeAnalysis import Probe
 from probeAnalysis import lt
 from probeAnalysis import ddt
+from probeAnalysis import yes_or_no
+from probeAnalysis import general_gamma
 from scipy.interpolate import interp1d
 from scipy.ndimage.filters import generic_filter
+from scipy.optimize import curve_fit
 import matplotlib as mpl; print(mpl.font_manager.get_cachedir())
 #####GOOD FONTS!!!! remove comment
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern'],'size':20})
@@ -40,7 +43,8 @@ print(os.getcwd())
 os.chdir('I:/PostProcess/ccc2')
 os.listdir()
 print(os.getcwd())
-
+date_time = datetime.datetime.now()
+print("GammaList"+str(date_time)) 
 ##input parameters
 nu = 1.55e-5
 #nu =7.7873794212218649517684887459807e-6 #for scaled length and velocity
@@ -57,7 +61,7 @@ dt=1e-5
 ndelta=21  # number of probes at each station (wall normal)
 ns=90      # number of stations
 probeInfo=[0,ndelta*ns-1,1] # [first,last,interval]
-zlocs=['-0.05']#, '-0.04']#, '-0.03', '-0.02', '-0.01', '0', '0.01', '0.02', '0.03', '0.04', '0.05']
+zlocs=['-0.05', '-0.04', '-0.03', '-0.02', '-0.01', '0.01', '0.02', '0.03', '0.04', '0.05']
 gamma = np.empty([0,4]) # culumns: s,w,z,gamma
 
 DAll=Probe()
@@ -122,11 +126,12 @@ data.time= DAll.time
 # data.detector =(np.square(ddt(data.v,data.time)))
 # data.detector =(np.square(ddt(data.w,data.time))+np.square(ddt(data.v,data.time)))
 # data.detector =np.square( np.absolute(ddt(data.w,data.time)) + np.absolute(ddt(data.v,data.time)) )
-data.detector =(np.square(ddt(data.w,data.time))) # 
-data.detector = data.D/(data.umean[:,None]) 
-data.detector =( np.absolute(data.w) + np.absolute(data.v) )/(data.umean[:,None]) 
-data.detector =np.square( np.absolute(ddt(data.wprime,data.time)) + np.absolute(ddt(data.vprime,data.time)) + np.absolute(ddt(data.uprime,data.time)) )/(data.umean[:,None]) 
-data.detector = np.sqrt(data.filterDA)/data.umean[:,None]
+# data.detector =(np.square(ddt(data.w,data.time))) # 
+# data.detector = data.D/(data.umean[:,None]) 
+# data.detector =( np.absolute(data.w) + np.absolute(data.v) )/(data.umean[:,None]) 
+# data.detector =np.square( np.absolute(ddt(data.wprime,data.time)) + np.absolute(ddt(data.vprime,data.time)) + np.absolute(ddt(data.uprime,data.time)) )/(data.umean[:,None]) 
+data.detector = np.sqrt(data.filterDA)/(data.umean[:,None])
+
 # print(data.w.shape)
 # print(data.detector.shape)
 # print(data.D.shape)
@@ -156,6 +161,7 @@ dx=0.01
 dt=1e-5
 
 N=200
+
 C = 0.01
 dFiltered2d=np.zeros(data.detector.shape)
 dFiltered2d2=np.zeros(data.detector.shape)
@@ -184,13 +190,13 @@ print('C*global max=', C*globalMax)
 # pl.show()
 
 pl.figure(2) 
-n1,x1,_=pl.hist(np.reshape(data.detector[data.detector<globalMax],-1),5000,histtype='step',density='true',color='y',label="$D$",cumulative=-1)
-n2,x2,_=pl.hist(dFiltered,5000,histtype='step',color='k',density='true',label=r"$\displaystyle\widetilde{D}$",cumulative=-1)
+n1,x1,_=pl.hist(np.reshape(data.detector[data.detector<globalMax],-1),5000,histtype='step',density='true',color='y',label="$D$")#,cumulative=-1)
+n2,x2,_=pl.hist(dFiltered,5000,histtype='step',color='k',density='true',label=r"$\displaystyle\widetilde{D}$")#,cumulative=-1)
 print(n2)
 print(np.diff(n1,2))
 pl.figure(11)
 pl.plot(np.diff(n1,2))
-pl.show()
+#pl.show()
 print(x1[np.argmax(np.diff(n1,2))])
 # pl.hist(data.detector[:,100],500,histtype='step',density='true',color='y',label="$D$")
 # pl.hist(dFiltered2d[:,100],100,histtype='step',color='k',density='true',label=r"$\displaystyle\widetilde{D}$")
@@ -210,7 +216,7 @@ pl.ylabel("f(S)")
 
 
 indexedProbes= ProbeIndex(DAll.loctn,[1e-3, 1e-9,0])
-selectedProbes = selectProbeIndexes(indexedProbes, [20, 200], [0,25 ])
+selectedProbes = selectProbeIndexes(indexedProbes, [0, 200], [0,200 ])
 
 nprobes=len(selectedProbes)
 for i in range(nprobes):
@@ -221,6 +227,26 @@ for i in range(nprobes):
     #N=int(dx/data.umean[probe]/dt)
     lamtu=lt(data.detector[probe,:],'threshglob',ostuGlobalThresh,N)
     gamma = np.append(gamma, [[loctn[0], loctn[1], loctn[2], np.mean(lamtu)]], axis = 0)
+
+    # xlim=[np.min(time), np.max(time)]#[0.9, 1]#
+    # ylim=[-2,2]
+    # pl.figure
+    
+    # pl.title("s/L= " + str((loctn[0]/L).round(4)) + "d/L= " + str((loctn[1].round(5)/L).round(6)))
+    # #pl.plot(time,Wprime,',',color='0.5')
+    # pl.plot(time[np.where(lamtu==0)],data.u[probe,:][np.where(lamtu==0)],',',color='0.5')
+    # pl.plot(time[np.where(lamtu==1)],data.u[probe,:][np.where(lamtu==1)],',r')
+    # pl.plot(xlim,[np.mean(data.u[probe,:]),np.mean(data.u[probe,:])],'-.g',linewidth=2.0)
+    # pl.plot(xlim,[np.mean(data.u[probe,:][np.where(lamtu==1)]),np.mean(data.u[probe,:][np.where(lamtu==1)])],'r',linewidth=2.0)
+    # pl.plot(xlim,[np.mean(data.u[probe,:][np.where(lamtu==0)]),np.mean(data.u[probe,:][np.where(lamtu==0)])],color='0.5',linewidth=2.0)
+    # # pl.plot(time[np.where(lamtu==0)],data.T1prime[probe,:][np.where(lamtu==0)],',',color='0.5')
+    # # pl.plot(time[np.where(lamtu==1)],data.T1prime[probe,:][np.where(lamtu==1)],',r')
+    # pl.xlabel('$t (s)$')
+    # pl.ylabel('$u_t (m/s)$')
+    # #pl.ylim(ylim)
+    # pl.xlim(xlim)
+    # pl.show()
+
 
     # xlim=[np.min(time), np.max(time)]#[0.9, 1]#
     # ylim=[-2,2]
@@ -263,17 +289,40 @@ for i in range(nprobes):
     # pl.plot(data.wprime[probe,:][np.where(lamtu==0)],data.vprime[probe,:][np.where(lamtu==0)],',',color='0.8')
     # pl.plot(data.wprime[probe,:][np.where(lamtu==1)],data.vprime[probe,:][np.where(lamtu==1)],',r')
     # pl.show()
-GammaList=clusterProbes(gamma,[1e-3, 1e-9,0])
-#with open("GammaList.txt", "wb") as fp:   #Pickling
-#    pickle.dump(GammaList, fp)
+GammaList, gammaarray=clusterProbes(gamma,[1e-3, 1e-9,0])
 
 
+print(gammaarray)
+pl.figure(12)
+pl.tricontour(gammaarray[:,0]/L, np.divide(gammaarray[:,1],gammaarray[:,3]), gammaarray[:,2], levels=np.arange(0.1,1,0.1), linewidths=1.0, colors='k' )
+cntr = pl.tricontourf(gammaarray[:,0]/L, np.divide(gammaarray[:,1],gammaarray[:,3]), gammaarray[:,2], levels=50, linewidths=0.5, cmap="Reds")
+pl.colorbar(cntr)
+pl.xlabel("$s/L$")
+pl.ylabel("$d/\delta_{99}$")
+
+pl.figure(13)
+pl.tricontour(gammaarray[:,0]/L, gammaarray[:,1], gammaarray[:,2], levels=np.arange(0.1,1,0.1), linewidths=1.0, colors='k')
+cntr = pl.tricontourf(gammaarray[:,0]/L, gammaarray[:,1], gammaarray[:,2], levels=50, linewidths=0.5, cmap="Reds")
+pl.colorbar(cntr)
+pl.xlabel("$s/L$")
+pl.ylabel("$d$")
+
+pl.figure(14)
+pl.tricontour(gammaarray[:,0]/L, gammaarray[:,1]/L, gammaarray[:,2], levels=np.arange(0.1,1,0.1), linewidths=1.0, colors='k')
+cntr = pl.tricontourf(gammaarray[:,0]/L, gammaarray[:,1]/L, gammaarray[:,2], levels=50, linewidths=0.5, cmap="Reds")
+pl.colorbar(cntr)
+pl.xlabel("$s/L$")
+pl.ylabel("$d/L$")
+pl.show()
 pl.figure(7)
-for i in range(20,len(GammaList),6):
+peakGamma=[]
+for i in  range(0,len(GammaList),1): # [40,45,50,55,60,65,70,75,80,85,89]: #
     
     g = GammaList[i].gamma
-    w = GammaList[i].wallDist
-       
+    w = GammaList[i].wallDist/GammaList[i].delta99
+    peakGamma.append([GammaList[i].s/L,np.max(g)])
+    #print('i=',i)
+    #print(str((GammaList[i].s/L).round(3)))  
     gsmooth = interp1d(w, g, kind='cubic',fill_value='extrapolate')
     wmid=w[:-1] + np.diff(w) / 2
     wnew = np.sort(np.concatenate((w,wmid)))
@@ -283,12 +332,82 @@ for i in range(20,len(GammaList),6):
     legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
     frame = legend.get_frame()
     frame.set_edgecolor('black')
-    pl.xlabel("Wall Distance")
+    pl.xlabel("$d/\delta_{99}$")
     pl.ylabel("$\gamma$")
-    pl.xlim([0,0.015])
+    pl.xlim([0,1.5])
     pl.ylim([0, 1])
+
+pl.figure(8)
+peakGamma=np.asarray(peakGamma)
+print(peakGamma)
+pl.plot(peakGamma[:,0],peakGamma[:,1],'k',linewidth=3.0,label='current study')
+popt, pcov=curve_fit(general_gamma, peakGamma[:,0], peakGamma[:,1],p0=[0.64,1.5])
+print(popt)
+pl.plot(np.arange(0.3,2,0.001),general_gamma(np.arange(0.3,2,0.001),*popt),'--r',linewidth=2,label='$1-exp(-5\eta^3)$')
+legend = pl.legend(fontsize=14,numpoints=1,loc='upper left') 
+frame = legend.get_frame()
+frame.set_edgecolor('black')
+pl.xlabel("$s/L$")
+pl.ylabel("$\gamma_{max}$")
+
+
+pl.figure(9)
+##plot selected lines
+for i in  [40,45,50,55,60,65,70,75,80,85,89]: # range(0,len(GammaList),1): # 
+    
+    g = GammaList[i].gamma
+    w = np.asarray(GammaList[i].wallDist)/GammaList[i].delta99
+    
+    #print('i=',i)
+    #print(str((GammaList[i].s/L).round(3)))  
+    gsmooth = interp1d(w, g, kind='cubic',fill_value='extrapolate')
+    wmid=w[:-1] + np.diff(w) / 2
+    wnew = np.sort(np.concatenate((w,wmid)))
+    
+    gnew = gsmooth(wnew)
+    pl.plot(wnew,gnew,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
+    legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
+    frame = legend.get_frame()
+    frame.set_edgecolor('black')
+    pl.xlabel("$d/\delta_{99}$")
+    pl.ylabel("$\gamma$")
+    pl.xlim([0,1.5])
+    pl.ylim([0, 1])
+
+pl.figure(20)
+##plot selected lines
+for i in  [40,45,50,55,60,65,70,75,80,85,89]: # range(0,len(GammaList),1): # 
+    
+    g = GammaList[i].gamma
+    w = np.asarray(GammaList[i].wallDist)/L
+    
+    #print('i=',i)
+    #print(str((GammaList[i].s/L).round(3)))  
+    gsmooth = interp1d(w, g, kind='cubic',fill_value='extrapolate')
+    wmid=w[:-1] + np.diff(w) / 2
+    wnew = np.sort(np.concatenate((w,wmid)))
+    
+    gnew = gsmooth(wnew)
+    pl.plot(wnew,gnew,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
+    legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
+    frame = legend.get_frame()
+    frame.set_edgecolor('black')
+    pl.xlabel("$d/L$")
+    pl.ylabel("$\gamma$")
+    pl.xlim([0,0.03])
+    pl.ylim([0, 1])
+
+
 pl.show()
+
+if yes_or_no('Would you like to save Gamma data?'):
+    filename="GammaList_"+str(date_time)
+    print(filename)
+    with open(filename, "wb") as fp:   #Pickling
+        pickle.dump(GammaList, fp)
 alaki
+
+
 
 #selectedProbes = selectProbes(DAll.loctn, [0.34, 0.7], [0, 1e-4])
 

@@ -6,7 +6,21 @@ from skimage import filters
 import matplotlib.pyplot as pl
 from scipy.ndimage.filters import generic_filter
 
+def yes_or_no(question):
 
+    reply = str(input(question+' (y/n): ')).lower().strip()
+
+    if reply[0] == 'y':
+
+        return True
+
+    if reply[0] == 'n':
+
+        return False
+
+    else:
+
+        return yes_or_no("Uhhhh... please enter ")
 ## transfers the coordinates
 ## calculates s,wallDist and z-axiz
 ## calculates Rotation tensor which can be used if needed! now most of the parameters are already rotated. 
@@ -323,15 +337,17 @@ def selectProbeIndexes(probeIndex,s,walldist):
   #print(loctn[index])
   return index
 class Gamma(object):
-    def __init__(self,s,wallDist,gamma):
+    def __init__(self,s,wallDist,gamma,delta99):
         self.s = s
         self.wallDist = wallDist
         self.gamma = gamma
+        self.delta99 = delta99
         
 
 ### cluster probes corresponding to their locations, outputs an array with corresponding bin numbers, last col remains gamma
 def clusterProbes(gamma, thresh):
     #print(gamma.shape)
+    sref, delta99ref=np.loadtxt(os.path.dirname(os.path.realpath(__file__)) + "/delta99",unpack=True)
     gammaIndex=np.insert(gamma,[0,0],np.ones([len(gamma[:,0]),2]),axis=1)
     #print(gammaIndex.shape)
     
@@ -365,13 +381,16 @@ def clusterProbes(gamma, thresh):
             counterw=counterw+1
         #print('updated gammaIndex in sub loop\n',gammaIndex.round(6))
     GammaList=[]
+    gammaarray=np.empty( shape=(0, 4) )
+
     #print(np.max(gammaIndex[:,0]))
     for i in range(int(np.max(gammaIndex[:,0]))+1):
         #filter this location
         gammas=gammaIndex[gammaIndex[:,0]==i,:]
         #print('gammas\n',gammas.round(3))
         s=np.mean(gammas[:,2])
-        
+        #delta99=0.0007299381*np.exp(4.025940745*s)
+        delta99 = np.interp(s,sref,delta99ref)
         #print(s)
         w=[] # list of wall distances  for this s
         g=[] # list of gamma for this s
@@ -380,12 +399,18 @@ def clusterProbes(gamma, thresh):
             #print(gammaw.round(4))
             w.append(np.mean(gammaw[:,3]))
             g.append(np.mean(gammaw[:,5]))
-        GammaList.append(Gamma(s,w,g))
+        GammaList.append(Gamma(s,w,g,delta99))
+        warray=np.asarray(w)
+        garray=np.asarray(g)
+        sarray= np.ones((len(w),1))*s
+        delta99array=np.ones((len(w),1))*delta99
+        temp=np.column_stack( (sarray,warray,garray,delta99array))
+        gammaarray=np.vstack((gammaarray,temp))
         # print(GammaList[i].s)
         # print(GammaList[i].wallDist)
         # print(GammaList[i].gamma)
-    
-    return GammaList
+    print(w)
+    return GammaList, np.asarray(gammaarray)
 def ProbeIndex(gamma, thresh):
     #print(gamma.shape)
     gammaIndex=np.insert(gamma,[0,0],np.ones([len(gamma[:,0]),2]),axis=1)
@@ -476,3 +501,6 @@ def lt(detector,method,input,smoothingLength):
 def running_mean(x, N):
     cumsum = np.cumsum(np.insert(x, 0, 0)) 
     return (cumsum[N:] - cumsum[:-N]) / float(N)
+
+def general_gamma(x,xs,xe):
+    return 1-np.exp(-5* np.power( (x-xs) /(xe-xs),3  ))

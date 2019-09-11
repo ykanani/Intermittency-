@@ -19,7 +19,7 @@ from skimage import filters
 from probeAnalysis import (Gamma, ProbeVars, clusterProbes, processFile,
                            selectProbes)
 
-os.chdir('I:/PostProcess/ccc2')
+os.chdir('I:/PostProcess/ccc9')
 os.listdir()
 
 print(os.getcwd())
@@ -43,7 +43,7 @@ gamma = np.empty([0,4]) # culumns: s,w,z,gamma
 for k in range(len(zlocs)):
     probeName=  "p_ss_BL_z" + zlocs[k]# "test"  #
     
-    # D = processFile(probeInfo,probeName,initTime= "0.43001",varName="D",nComp=1)
+    # D = processFile(probeInfo,probeName,initTime= "0.35001",varName="D",nComp=1)
     # with open("postProcessing/" + D.varName + "_" + probeName, "wb") as fp:   #Pickling
     #     pickle.dump(D, fp)
     # del D
@@ -55,7 +55,7 @@ for k in range(len(zlocs)):
     # del p
     # gc.collect()
 
-    # T1 = processFile(probeInfo, probeName,initTime= "0.43",varName="T1",nComp=1)
+    # T1 = processFile(probeInfo, probeName,initTime= "0.35",varName="T1",nComp=1)
     # with open("postProcessing/" + T1.varName + "_" + probeName, "wb") as fp:   #Pickling
     #     pickle.dump(T1, fp)
     # del T1
@@ -67,22 +67,28 @@ for k in range(len(zlocs)):
     # del T2
     # gc.collect()
 
-    # U = processFile(probeInfo,probeName,initTime= "0.43",varName="U",nComp=3)
+    # U = processFile(probeInfo,probeName,initTime= "0.35",varName="U",nComp=3)
     # with open("postProcessing/" + U.varName + "_" + probeName, "wb") as fp:   #Pickling
     #     pickle.dump(U, fp)
     # del U
     # gc.collect()
 
-    # Utn = processFile(probeInfo,probeName,initTime= "0.43",varName="Utn",nComp=3)
+    # Utn = processFile(probeInfo,probeName,initTime= "0.35",varName="Utn",nComp=3)
     # with open("postProcessing/" + Utn.varName + "_" + probeName, "wb") as fp:   #Pickling
     #     pickle.dump(Utn, fp)
     # del Utn
     # gc.collect()
 
-    # filterDA = processFile(probeInfo,probeName,initTime= "0.43001",varName="filterDA",nComp=1)
+    # filterDA = processFile(probeInfo,probeName,initTime= "0.35001",varName="filterDA",nComp=1)
     # with open("postProcessing/" + filterDA.varName + "_" + probeName, "wb") as fp:   #Pickling
     #     pickle.dump(filterDA, fp)
     # del filterDA
+    # gc.collect()
+
+    # filterDA5 = processFile(probeInfo,probeName,initTime= "0.35001",varName="filterDA5",nComp=1)
+    # with open("postProcessing/" + filterDA5.varName + "_" + probeName, "wb") as fp:   #Pickling
+    #     pickle.dump(filterDA5, fp)
+    # del filterDA5
     # gc.collect()
 
     # filterDG = processFile(probeInfo,probeName,initTime= "0.43001",varName="filterDG",nComp=1)
@@ -97,11 +103,11 @@ for k in range(len(zlocs)):
     # del filterQA
     # gc.collect()
 
-    gradU = processFile(probeInfo,probeName,initTime= "0.43001",varName="gradU",nComp=9)
-    with open("postProcessing/" + gradU.varName + "_" + probeName, "wb") as fp:   #Pickling
-        pickle.dump(gradU, fp, protocol=4)
-    del gradU
-    gc.collect()
+    # gradU = processFile(probeInfo,probeName,initTime= "0.43001",varName="gradU",nComp=9)
+    # with open("postProcessing/" + gradU.varName + "_" + probeName, "wb") as fp:   #Pickling
+    #     pickle.dump(gradU, fp, protocol=4)
+    # del gradU
+    # gc.collect()
 
     # Q = processFile(probeInfo,probeName,initTime= "0.43001",varName="Q",nComp=1)
     # with open("postProcessing/" + Q.varName + "_" + probeName, "wb") as fp:   #Pickling
