@@ -200,3 +200,8 @@ for i in  [40,45,50,55,60,65,70,75,80,85,89]: # range(0,len(GammaList),1): #
 
 
 pl.show()
+
+filename="GammaList_"+date_time.strftime("%b-%d-%Y-%H_%M_%S")
+print(filename)
+with open(filename, "wb") as fp:   #Pickling
+    pickle.dump(GammaList, fp)
