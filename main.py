@@ -30,10 +30,12 @@ from probeAnalysis import lt
 from probeAnalysis import ddt
 from probeAnalysis import yes_or_no
 from probeAnalysis import general_gamma
+from probeAnalysis import filterSignal
 from scipy.interpolate import interp1d
 from scipy.ndimage.filters import generic_filter
 from scipy.optimize import curve_fit
 import matplotlib as mpl; print(mpl.font_manager.get_cachedir())
+
 #####GOOD FONTS!!!! remove comment
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern'],'size':20})
 rc('text', usetex=True)
@@ -84,6 +86,8 @@ for k in range(len(zlocs)):
         T1All.append(pickle.load(fp))
     print('finished reading data files...')
 
+
+
 data=ProbeVars()
 data.D = DAll.data
 ## correct the first D datapoint in time which is very high, dont know why!
@@ -116,7 +120,7 @@ data.wprime = data.w-data.wmean[:,None]
 data.loctn = DAll.loctn
 data.time= DAll.time
 
-
+indexedProbes= ProbeIndex(DAll.loctn,[1e-3, 1e-9,0])
 ## choice of detector function
 
 
@@ -130,8 +134,19 @@ data.time= DAll.time
 # data.detector = data.D/(data.umean[:,None]) 
 # data.detector =( np.absolute(data.w) + np.absolute(data.v) )/(data.umean[:,None]) 
 # data.detector =np.square( np.absolute(ddt(data.wprime,data.time)) + np.absolute(ddt(data.vprime,data.time)) + np.absolute(ddt(data.uprime,data.time)) )/(data.umean[:,None]) 
-data.detector = np.sqrt(data.filterDA)/(data.umean[:,None])
 
+#data.detector = np.sqrt(data.filterDA)#/(data.umean[:,None]) #(np.sqrt(np.mean(np.square(data.wprime[:,None])))+np.sqrt(np.mean(np.square(data.vprime[:,None]))))
+#data.detector = (np.square(ddt(np.multiply(data.uprime,data.vprime),data.time)))
+data.detector=np.zeros(data.filterDA.shape)
+## scaling detecors with freestream velocity
+for j in np.arange(0,90,1):
+    selectedProbesCurrentS = selectProbeIndexes(indexedProbes, [j, j], [0,200])
+    selectedProbesCurrentSFreeStream = selectProbeIndexes(indexedProbes, [j, j], [20,20])
+    
+    
+    data.detector[selectedProbesCurrentS,:]=np.sqrt(data.filterDA[selectedProbesCurrentS,:])/np.mean(data.umean[selectedProbesCurrentSFreeStream])
+    #data.detector[selectedProbesCurrentS,:]= ((ddt(np.multiply(data.uprime[selectedProbesCurrentS,:],data.vprime[selectedProbesCurrentS,:]),data.time)))/np.mean(data.umean[selectedProbesCurrentSFreeStream])
+    #data.detector[selectedProbesCurrentS,:] =np.absolute(ddt(data.wprime[selectedProbesCurrentS,:]+data.vprime[selectedProbesCurrentS,:]+data.uprime[selectedProbesCurrentS,:],data.time)) /np.mean(data.umean[selectedProbesCurrentSFreeStream])
 # print(data.w.shape)
 # print(data.detector.shape)
 # print(data.D.shape)
@@ -163,17 +178,26 @@ dt=1e-5
 N=200
 
 C = 0.01
-dFiltered2d=np.zeros(data.detector.shape)
-dFiltered2d2=np.zeros(data.detector.shape)
-dFiltered2d3=np.zeros(data.detector.shape)
-dFiltered2d4=np.zeros(data.detector.shape)
-for i in range(data.detector.shape[0]):
+
+#################################### SELECTING PROBES
+
+smin=0.25
+smax=1
+sIndexes=np.argwhere((data.loctn[:,0]>smin) & (data.loctn[:,0]<smax)  )
+
+
+dFiltered2d=np.zeros((len(sIndexes),len(data.time)))
+dFiltered2d2=np.zeros((len(sIndexes),len(data.time)))
+dFiltered2d3=np.zeros((len(sIndexes),len(data.time)))
+dFiltered2d4=np.zeros((len(sIndexes),len(data.time)))
+for i in np.arange(sIndexes.shape[0]):
+    iindex=sIndexes[i][0]
     #N=int(dx/data.umean[i]/dt)
     #print(N)
     #dFiltered2d[i,:]=np.convolve(data.detector[i,:], np.ones((N,))/N, mode='same')
-    dFiltered2d[i,:]=signal.convolve(data.detector[i,:], np.ones((N,))/N, mode='same',method='auto') # this is faster
-    # dFiltered2d2[i,:]=signal.convolve(dFiltered2d[i,:], np.ones((N,))/N, mode='same',method='auto') # this is faster
-    # dFiltered2d3[i,:]=signal.convolve(dFiltered2d2[i,:], np.ones((N,))/N, mode='same',method='auto') # this is faster
+    dFiltered2d[i,:]=signal.convolve(data.detector[iindex,:], np.ones((N,))/N, mode='same',method='auto') # this is faster
+    dFiltered2d2[i,:]=signal.convolve(dFiltered2d[i,:], np.ones((N,))/N, mode='same',method='auto') # this is faster
+    dFiltered2d3[i,:]=signal.convolve(dFiltered2d2[i,:], np.ones((N,))/N, mode='same',method='auto') # this is faster
     #dFiltered2d4[i,:]=generic_filter(data.detector[i,:], np.std, size=N)
     #dFiltered2d3[i,:]=signal.convolve(np.square(data.detector[i,:]), np.ones((N,))/N, mode='same',method='auto') # this is faster
     #dFiltered2d4[i,:]=np.sqrt(dFiltered2d3[i,:]-np.square(dFiltered2d[i,:]))
@@ -215,17 +239,83 @@ pl.ylabel("f(S)")
 # pl.show()
 
 
-indexedProbes= ProbeIndex(DAll.loctn,[1e-3, 1e-9,0])
-selectedProbes = selectProbeIndexes(indexedProbes, [0, 200], [0,200 ])
 
+selectedProbes = selectProbeIndexes(indexedProbes, [0, 200], [0,200 ])
+selectedProbesFreeStream = selectProbeIndexes(indexedProbes, [0, 200], [20,20 ])
+AvgDetectorFS=np.mean(data.detector[selectedProbesFreeStream,:])
+selectedProbesTrail = selectProbeIndexes(indexedProbes, [89, 89], [0,200 ])
+# sindex=36, s=0.299
+ostuWThreshWallindex = np.zeros(21)
+manualThreshWallindex = np.zeros(21)
+for j in np.arange(0,21,1):
+    print("wall index=",j)
+    selectedProbesCurrentWallDistanceAll = selectProbeIndexes(indexedProbes, [0, 200], [j,j])
+    selectedProbesCurrentWallDistanceLam = selectProbeIndexes(indexedProbes, [0, 36], [j,j])
+    selectedProbesCurrentWallDistanceTurb = selectProbeIndexes(indexedProbes, [37, 200], [j,j])
+    ostuWThreshWallindex[j] = filters.threshold_otsu(filterSignal(data.detector[selectedProbesCurrentWallDistanceAll,1:].flatten(),200,1))
+    pl.subplot(211)
+    maxAll=np.max(filterSignal(data.detector[selectedProbesCurrentWallDistanceAll,:].flatten(),200,1))
+    maxLam=np.max(filterSignal(data.detector[selectedProbesCurrentWallDistanceLam,:].flatten(),200,1))
+    maxTurb=np.max(filterSignal(data.detector[selectedProbesCurrentWallDistanceTurb,:].flatten(),200,1))
+    maxBinvalue = np.min([maxAll,maxLam,maxTurb])
+    countsAll,binsAll=np.histogram(filterSignal(data.detector[selectedProbesCurrentWallDistanceAll,:].flatten(),200,1),bins=1000,range=(0.0,maxBinvalue))
+    countsLam,binsLam=np.histogram(filterSignal(data.detector[selectedProbesCurrentWallDistanceLam,:].flatten(),200,1),bins=1000,range=(0.0,maxBinvalue))
+    countsTurb,binsTurb=np.histogram(filterSignal(data.detector[selectedProbesCurrentWallDistanceTurb,:].flatten(),200,1),bins=1000,range=(0.0,maxBinvalue))
+    pl.hist(binsAll[:-1], binsAll, weights=countsAll/np.sum(countsAll),histtype='step',color='k',label=r"$\displaystyle\widetilde{D}$")
+    pl.hist(binsLam[:-1], binsLam, weights=countsLam/np.sum(countsAll),histtype='step',color='b',label=r"$\displaystyle\widetilde{D}$")
+    pl.hist(binsTurb[:-1], binsTurb, weights=countsTurb/np.sum(countsAll),histtype='step',color='r',label=r"$\displaystyle\widetilde{D}$")
+    pl.axvline(ostuWThreshWallindex[j], color='k', linestyle='dashed', linewidth=1)
+    pl.show()
+    # # # pl.subplot(211)
+    # # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWallDistanceAll,:].flatten(),200,1),1000,histtype='step'
+    # # # ,color='k',label=r"$\displaystyle\widetilde{D}$")#,cumulative=-1) #,density='true'
+    # # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWallDistanceLam,:].flatten(),200,1),1000,histtype='step'
+    # # # ,color='b',label=r"$\displaystyle\widetilde{D}$")#,cumulative=-1)
+    # # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWallDistanceTurb,:].flatten(),200,1),1000,histtype='step'
+    # # # ,color='r',label=r"$\displaystyle\widetilde{D}$")#,cumulative=-1)
+    # # # pl.axvline(ostuWThreshWallindex[j], color='k', linestyle='dashed', linewidth=1)
+
+    # # # pl.subplot(212)
+    # # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWallDistanceAll,:].flatten(),200,1),1000,histtype='step'
+    # # # ,color='k',label=r"$\displaystyle\widetilde{D}$",cumulative=-1)
+    # # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWallDistanceLam,:].flatten(),200,1),1000,histtype='step'
+    # # # ,color='b',label=r"$\displaystyle\widetilde{D}$",cumulative=-1)
+    # # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWallDistanceTurb,:].flatten(),200,1),1000,histtype='step'
+    # # # ,color='r',label=r"$\displaystyle\widetilde{D}$",cumulative=-1)
+    # # # #pl.axis([0,30000,0,1])
+    # # #pl.show()
+    manualThreshWallindex[j]=eval(input("Please enter the thresh value:"))
 nprobes=len(selectedProbes)
+indexedProbesSoretedByProbeNo=indexedProbes[np.argsort(indexedProbes[:,5])]
 for i in range(nprobes):
     probe=selectedProbes[i]
     loctn=data.loctn[probe]
+    ##print('probe location=',loctn)
+    ## calculating detector at current freestream
+    
+    #indexprobeThisProbe=indexedProbes[indexedProbes[:,5]==probe].flatten()
+    currentSIndex=indexedProbesSoretedByProbeNo[probe,0]#indexprobeThisProbe[0]
+    currentWIndex=indexedProbesSoretedByProbeNo[probe,1]#indexprobeThisProbe[1]
+    #selectedProbesCurrentFreeStream = selectProbeIndexes(indexedProbes, [currentSIndex, currentSIndex], [20,20 ])
+    #selectedProbesCurrentWallDistance = selectProbeIndexes(indexedProbes, [0, 200], [currentWIndex,currentWIndex])
+    #selectedProbesCurrentWS = selectProbeIndexes(indexedProbes, [currentSIndex, currentSIndex], [currentWIndex,currentWIndex])
+    #RefDetectorFS=np.mean(data.detector[selectedProbesCurrentFreeStream,1:])
+    #ostuWThresh = filters.threshold_otsu(filterSignal(data.detector[selectedProbesCurrentWallDistance,1:].flatten(),200,1))
+    ##print('wall index=',currentWIndex)
+    # # print('otsu thresh=',ostuWThreshWallindex[int(currentWIndex)])
+    # # pl.subplot(211)
+    # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWS,:].flatten(),200,1),1000,histtype='step'
+    # # ,color='k',density='true',label=r"$\displaystyle\widetilde{D}$")#,cumulative=-1)
+    # # pl.axvline(ostuWThresh, color='k', linestyle='dashed', linewidth=1)
+    # # pl.subplot(212)
+    # # pl.hist(filterSignal(data.detector[selectedProbesCurrentWS,:].flatten(),200,1),1000,histtype='step'
+    # # ,color='k',density='true',label=r"$\displaystyle\widetilde{D}$",cumulative=-1)
+    # # #pl.axis([0,30000,0,1])
+    # # pl.show()
     #print('Location=',loctn)
     time=data.time
     #N=int(dx/data.umean[probe]/dt)
-    lamtu=lt(data.detector[probe,:],'threshglob',ostuGlobalThresh,N)
+    lamtu=lt(data.detector[probe,:],'thresh',manualThreshWallindex[int(currentWIndex)],refLam=data.detector[1,:]) #threshglob,ostuGlobalThresh,otsuloc
     gamma = np.append(gamma, [[loctn[0], loctn[1], loctn[2], np.mean(lamtu)]], axis = 0)
 
     # xlim=[np.min(time), np.max(time)]#[0.9, 1]#
@@ -292,7 +382,7 @@ for i in range(nprobes):
 GammaList, gammaarray=clusterProbes(gamma,[1e-3, 1e-9,0])
 
 
-print(gammaarray)
+##print(gammaarray)
 pl.figure(12)
 pl.tricontour(gammaarray[:,0]/L, np.divide(gammaarray[:,1],gammaarray[:,3]), gammaarray[:,2], levels=np.arange(0.1,1,0.1), linewidths=1.0, colors='k' )
 cntr = pl.tricontourf(gammaarray[:,0]/L, np.divide(gammaarray[:,1],gammaarray[:,3]), gammaarray[:,2], levels=50, linewidths=0.5, cmap="Reds")
@@ -313,7 +403,7 @@ cntr = pl.tricontourf(gammaarray[:,0]/L, gammaarray[:,1]/L, gammaarray[:,2], lev
 pl.colorbar(cntr)
 pl.xlabel("$s/L$")
 pl.ylabel("$d/L$")
-pl.show()
+# pl.show()
 pl.figure(7)
 peakGamma=[]
 for i in  range(0,len(GammaList),1): # [40,45,50,55,60,65,70,75,80,85,89]: #
@@ -328,7 +418,7 @@ for i in  range(0,len(GammaList),1): # [40,45,50,55,60,65,70,75,80,85,89]: #
     wnew = np.sort(np.concatenate((w,wmid)))
     
     gnew = gsmooth(wnew)
-    pl.plot(wnew,gnew,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
+    pl.plot(w,g,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
     legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
     frame = legend.get_frame()
     frame.set_edgecolor('black')
@@ -339,10 +429,10 @@ for i in  range(0,len(GammaList),1): # [40,45,50,55,60,65,70,75,80,85,89]: #
 
 pl.figure(8)
 peakGamma=np.asarray(peakGamma)
-print(peakGamma)
+##print(peakGamma)
 pl.plot(peakGamma[:,0],peakGamma[:,1],'k',linewidth=3.0,label='current study')
 popt, pcov=curve_fit(general_gamma, peakGamma[:,0], peakGamma[:,1],p0=[0.64,1.5])
-print(popt)
+##print(popt)
 pl.plot(np.arange(0.3,2,0.001),general_gamma(np.arange(0.3,2,0.001),*popt),'--r',linewidth=2,label='$1-exp(-5\eta^3)$')
 legend = pl.legend(fontsize=14,numpoints=1,loc='upper left') 
 frame = legend.get_frame()
@@ -365,7 +455,7 @@ for i in  [40,45,50,55,60,65,70,75,80,85,89]: # range(0,len(GammaList),1): #
     wnew = np.sort(np.concatenate((w,wmid)))
     
     gnew = gsmooth(wnew)
-    pl.plot(wnew,gnew,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
+    pl.plot(w,g,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
     legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
     frame = legend.get_frame()
     frame.set_edgecolor('black')
@@ -388,7 +478,7 @@ for i in  [40,45,50,55,60,65,70,75,80,85,89]: # range(0,len(GammaList),1): #
     wnew = np.sort(np.concatenate((w,wmid)))
     
     gnew = gsmooth(wnew)
-    pl.plot(wnew,gnew,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
+    pl.plot(w,g,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
     legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
     frame = legend.get_frame()
     frame.set_edgecolor('black')
@@ -491,7 +581,7 @@ for i in range(0,len(GammaList),6):
     wnew = np.sort(np.concatenate((w,wmid)))
     
     gnew = gsmooth(wnew)
-    pl.plot(wnew,gnew,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
+    pl.plot(w,g,label="$s/L=$"+str((GammaList[i].s/L).round(2)))
     legend = pl.legend(fontsize=14,numpoints=1,loc='upper right') 
     frame = legend.get_frame()
     frame.set_edgecolor('black')

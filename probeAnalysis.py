@@ -5,6 +5,9 @@ from scipy import signal
 from skimage import filters
 import matplotlib.pyplot as pl
 from scipy.ndimage.filters import generic_filter
+from sklearn.cluster import MeanShift
+from sklearn.cluster import estimate_bandwidth
+
 
 def yes_or_no(question):
 
@@ -199,7 +202,13 @@ class Probe(object):
             self.loctn = np.concatenate((self.loctn,probe.loctn))
 
 
-    
+def processWallProbe(probeName,initTime,varName,nComp):
+    mainfolder = "postProcessing/" + probeName
+    timeSteps = os.listdir(mainfolder) 
+    for time in timeSteps:
+        file = mainfolder + "/" + time + "/" + varName
+        print("started reading " + file)
+
 def processFile(probeInfo,probeName,initTime,varName,nComp):
     file = "postProcessing/" + probeName + "/" + initTime + "/" + varName
     print("started reading " + file)
@@ -331,7 +340,7 @@ def selectProbeIndexes(probeIndex,s,walldist):
   index=[]
   for j in range(probeIndex.shape[0]):
         if (probeIndex[j][0]>=s[0] and probeIndex[j][0]<=s[1] and probeIndex[j][1]>=walldist[0] and probeIndex[j][1]<=walldist[1]):
-            index.append(j)
+            index.append(int(probeIndex[j][5]))
             
   #print(index)
   #print(loctn[index])
@@ -413,10 +422,12 @@ def clusterProbes(gamma, thresh):
     return GammaList, np.asarray(gammaarray)
 def ProbeIndex(gamma, thresh):
     #print(gamma.shape)
-    gammaIndex=np.insert(gamma,[0,0],np.ones([len(gamma[:,0]),2]),axis=1)
+    gammaIndex0=np.insert(gamma,[0,0],np.ones([len(gamma[:,0]),2]),axis=1)
     #print(gammaIndex.shape)
     
     ####inserted two columns to the gamma at the beginning, to preserve s and w to be used later, first column is the s _index, the second column would be the w index 
+    ##inserting row number to preserve probe number
+    gammaIndex=np.insert(gammaIndex0,5,np.arange(len(gamma[:,0])),axis=1)
     # thresh 0 - s, thresh 1- w, thresh 3 - z
     #sorting based on s
     gammaIndex=gammaIndex[np.argsort(gammaIndex[:,2])]
@@ -447,9 +458,9 @@ def ProbeIndex(gamma, thresh):
         #print('updated gammaIndex in sub loop\n',gammaIndex.round(6))
     return gammaIndex
 
-def lt(detector,method,input,smoothingLength):
-    N=smoothingLength #100
-    dSmooth=signal.convolve(detector, np.ones((N,))/N, mode='valid')
+def lt(detector,method,input=0,refLam=0,N=200):
+    #N=smoothingLength #100
+    dSmooth=signal.convolve(detector, np.ones((N,))/N, mode='valid') #now smoothing is done outside
     #dSmooth=signal.convolve(dSmooth, np.ones((N,))/N, mode='valid')
     #dSmooth2=running_mean(detector,N)
     dt=1e-5
@@ -469,7 +480,7 @@ def lt(detector,method,input,smoothingLength):
     ## Laminar/Turbulent Discrimination
     if method=='otsuloc':
         ### Otsu
-        thresh_otsu= filters.threshold_otsu(dSmooth)
+        thresh_otsu= filters.threshold_otsu(np.concatenate((dSmooth,refLam),axis=None))
         lt_otsu=np.where(dSmooth>thresh_otsu, 1, 0) # Laminar_Turbulent, Ostu
         lamtu = lt_otsu
         print("Otsu Threshhold={:.2e}".format(thresh_otsu))
@@ -489,18 +500,35 @@ def lt(detector,method,input,smoothingLength):
         lt_cmax=np.where(dSmooth>C*np.max(dSmooth),1,0)#0.01*24473540.92065062,1,0)#>0.01*269112747.3345178,1,0) ##6419964748.39, 1, 0) # Laminar_Turbulent, C*max(D)
         lamtu = lt_cmax
         #pl.plot(time[int(N/2):int(-N/2+1)],lt_cmax,'-b',label="LT")
-    elif method=='threshglob':
+    elif method=='thresh':
         thresh = input 
         ### threshhold, can be c*Max(D) or otsu global   
         #lt_cmax=np.where(DSmooth>C*np.max(DSmooth), 1, 0) # Laminar_Turbulent, C*max(D)
         lt_cmax=np.where(dSmooth>thresh,1,0)#0.01*24473540.92065062,1,0)#>0.01*269112747.3345178,1,0) ##6419964748.39, 1, 0) # Laminar_Turbulent, C*max(D)
         lamtu = lt_cmax
         #pl.plot(time[int(N/2):int(-N/2+1)],lt_cmax,'-b',label="LT")
+    elif method=='meanshift': #not complete, dont use
+        bw=estimate_bandwidth(np.tile(dSmooth,(2,1)))
+        print(bw)
+        if bw<10:
+            bw=10
+
+        clustering = MeanShift(bandwidth=1000).fit(np.tile(dSmooth,(2,1)))
+        lamtu=clustering.labels_
+
+
     return lamtu
 
 def running_mean(x, N):
     cumsum = np.cumsum(np.insert(x, 0, 0)) 
     return (cumsum[N:] - cumsum[:-N]) / float(N)
+
+def filterSignal(x, N,level):
+    result =x
+    for i in range(level):
+        result = signal.convolve(result, np.ones((N,))/N, mode='same',method='auto')
+
+    return result
 
 def general_gamma(x,xs,xe):
     return 1-np.exp(-5* np.power( (x-xs) /(xe-xs),3  ))
